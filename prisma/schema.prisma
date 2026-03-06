@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                          String    @id @default(uuid())
+  email                       String    @unique
+  passwordHash                String    @map("password_hash")
+  aleoAddress                 String?   @map("aleo_address")
+  evmWalletEncrypted          String?   @map("evm_wallet_encrypted")
+  username                    String?   @unique
+  displayName                 String?   @map("display_name")
+  bio                         String?
+  xHandle                     String?   @map("x_handle")
+  subscriptionPriceMicrocredits BigInt  @default(0) @map("subscription_price_microcredits")
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+
+  posts                Post[]
+  performanceCache     PerformanceCache[]
+  exchangeConnections  ExchangeConnection[]
+  subscribedTo         Subscription[]       @relation("subscriber")
+  subscribers          Subscription[]       @relation("creator")
+
+  @@map("users")
+}
+
+model PerformanceCache {
+  userId           String   @map("user_id")
+  period           String   // 24H, 7D, 30D, ALL
+  winRate          Decimal? @map("win_rate") @db.Decimal(5, 2)
+  winStreak        Int?     @map("win_streak")
+  trustScore       Decimal? @map("trust_score") @db.Decimal(5, 2)
+  tradeCount       Int?     @map("trade_count")
+  positionsOpened  Int?     @map("positions_opened")
+  positionsClosed  Int?     @map("positions_closed")
+  weightClass      String?  @map("weight_class") // Lightweight, Middleweight, Heavyweight
+  lastVerifiedAt   DateTime? @map("last_verified_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, period])
+  @@map("performance_cache")
+}
+
+model Post {
+  id               String   @id @default(uuid())
+  creatorId        String   @map("creator_id")
+  title            String?
+  contentEncrypted String?  @map("content_encrypted")
+  contentHash      String?  @map("content_hash")
+  aleoPostId       String?  @map("aleo_post_id")
+  publishedAt      DateTime @default(now()) @map("published_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  creator User @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@map("posts")
+}
+
+model Subscription {
+  id                 String   @id @default(uuid())
+  subscriberId       String   @map("subscriber_id")
+  creatorId          String   @map("creator_id")
+  status             String   @default("active") // active, expired, cancelled
+  priceMicrocredits  BigInt?  @map("price_microcredits")
+  startedAt          DateTime @default(now()) @map("started_at")
+  expiresAt          DateTime? @map("expires_at")
+  aleoTxId           String?  @map("aleo_tx_id")
+
+  subscriber User @relation("subscriber", fields: [subscriberId], references: [id], onDelete: Cascade)
+  creator    User @relation("creator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriberId, creatorId])
+  @@map("subscriptions")
+}
+
+model ExchangeConnection {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  exchange        String   // hyperliquid, binance
+  apiKeyEncrypted String?  @map("api_key_encrypted")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("exchange_connections")
+}
