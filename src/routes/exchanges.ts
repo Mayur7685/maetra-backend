@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../lib/db.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { runProofPipeline, formatForLeo, fetchTradeMetrics } from "../lib/exchanges/pipeline.js";
+import { runProofPipeline } from "../lib/exchanges/pipeline.js";
 
 const exchanges = new Hono();
 exchanges.use("*", authMiddleware);
@@ -156,6 +156,86 @@ exchanges.get("/proof-inputs", async (c) => {
     cached: false,
     leoInputs: result.leoInputs,
     metrics: result.metrics,
+  });
+});
+
+// POST /api/exchanges/mock-sync — generate demo data for testing without real exchange
+exchanges.post("/mock-sync", async (c) => {
+  const { userId } = c.get("user");
+
+  // Realistic demo metrics
+  const metrics = {
+    totalTrades: 87 + Math.floor(Math.random() * 40),
+    profitableTrades: 52 + Math.floor(Math.random() * 20),
+    profitableDays: 18 + Math.floor(Math.random() * 8),
+    totalDays: 30,
+    currentStreak: 2 + Math.floor(Math.random() * 6),
+    avgVolumeUsd: 50_000 + Math.floor(Math.random() * 200_000),
+    totalPnl: Math.round((Math.random() * 8000 - 1000) * 100) / 100,
+    positionsOpened: 40 + Math.floor(Math.random() * 30),
+    positionsClosed: 35 + Math.floor(Math.random() * 25),
+  };
+
+  // Cache in DB (same as real pipeline)
+  const winRate = (metrics.profitableDays / metrics.totalDays) * 100;
+  const logVal = Math.log10(metrics.totalTrades + 1);
+  const trustScore = (winRate * logVal) / 100;
+  const weightClass = metrics.avgVolumeUsd >= 500_000
+    ? "Heavyweight"
+    : metrics.avgVolumeUsd >= 100_000
+      ? "Middleweight"
+      : "Lightweight";
+
+  await db.performanceCache.upsert({
+    where: { userId_period: { userId, period: "30D" } },
+    create: {
+      userId,
+      period: "30D",
+      winRate,
+      winStreak: metrics.currentStreak,
+      trustScore,
+      tradeCount: metrics.totalTrades,
+      positionsOpened: metrics.positionsOpened,
+      positionsClosed: metrics.positionsClosed,
+      weightClass,
+      lastVerifiedAt: new Date(),
+    },
+    update: {
+      winRate,
+      winStreak: metrics.currentStreak,
+      trustScore,
+      tradeCount: metrics.totalTrades,
+      positionsOpened: metrics.positionsOpened,
+      positionsClosed: metrics.positionsClosed,
+      weightClass,
+      lastVerifiedAt: new Date(),
+    },
+  });
+
+  // Format for Leo program
+  const avgVolCents = Math.round(metrics.avgVolumeUsd * 100);
+  const leoInputs = {
+    profitable_days: `${metrics.profitableDays}u64`,
+    total_days: `${metrics.totalDays}u64`,
+    trade_count: `${metrics.totalTrades}u64`,
+    current_streak: `${metrics.currentStreak}u64`,
+    avg_volume_usd: `${avgVolCents}u64`,
+  };
+
+  return c.json({
+    metrics: {
+      totalTrades: metrics.totalTrades,
+      profitableTrades: metrics.profitableTrades,
+      profitableDays: metrics.profitableDays,
+      totalDays: metrics.totalDays,
+      currentStreak: metrics.currentStreak,
+      avgVolumeUsd: metrics.avgVolumeUsd,
+      totalPnl: metrics.totalPnl,
+      positionsOpened: metrics.positionsOpened,
+      positionsClosed: metrics.positionsClosed,
+    },
+    leoInputs,
+    period: "30D",
   });
 });
 
