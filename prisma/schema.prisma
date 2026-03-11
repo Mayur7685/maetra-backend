@@ -18,6 +18,8 @@ model User {
   bio                         String?
   xHandle                     String?   @map("x_handle")
   subscriptionPriceMicrocredits BigInt  @default(0) @map("subscription_price_microcredits")
+  publicKey                   String?   @map("public_key")           // ECDH P-256 public key (JWK JSON)
+  encryptedPrivateKey         String?   @map("encrypted_private_key") // Private key encrypted with password-derived key
   createdAt                   DateTime  @default(now()) @map("created_at")
   updatedAt                   DateTime  @updatedAt @map("updated_at")
 
@@ -26,6 +28,7 @@ model User {
   exchangeConnections  ExchangeConnection[]
   subscribedTo         Subscription[]       @relation("subscriber")
   subscribers          Subscription[]       @relation("creator")
+  contentKeys          CreatorContentKey[]
 
   @@map("users")
 }
@@ -72,12 +75,23 @@ model Subscription {
   startedAt          DateTime @default(now()) @map("started_at")
   expiresAt          DateTime? @map("expires_at")
   aleoTxId           String?  @map("aleo_tx_id")
+  encryptedCek       String?  @map("encrypted_cek") // CEK encrypted with ECDH shared secret for this subscriber
 
   subscriber User @relation("subscriber", fields: [subscriberId], references: [id], onDelete: Cascade)
   creator    User @relation("creator", fields: [creatorId], references: [id], onDelete: Cascade)
 
   @@unique([subscriberId, creatorId])
   @@map("subscriptions")
+}
+
+model CreatorContentKey {
+  creatorId     String   @id @map("creator_id")
+  encryptedCek  String   @map("encrypted_cek") // CEK encrypted with creator's own public key
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  creator User @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@map("creator_content_keys")
 }
 
 model ExchangeConnection {

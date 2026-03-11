@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../lib/db.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { verifyAleoTransaction } from "../lib/aleo-verify.js";
 
 const subscriptions = new Hono();
 subscriptions.use("*", authMiddleware);
@@ -10,7 +11,7 @@ subscriptions.get("/", async (c) => {
   const { userId } = c.get("user");
 
   const subs = await db.subscription.findMany({
-    where: { subscriberId: userId },
+    where: { subscriberId: userId, status: "active" },
     include: {
       creator: {
         select: {
@@ -66,6 +67,33 @@ subscriptions.post("/subscribe/:creatorId", async (c) => {
 
   if (existing?.status === "active") {
     return c.json({ error: "Already subscribed" }, 409);
+  }
+
+  // Enforce on-chain payment if creator has a price set
+  const creatorPrice = Number(creator.subscriptionPriceMicrocredits);
+  if (creatorPrice > 0) {
+    if (!aleoTxId) {
+      return c.json({ error: "On-chain payment required. Provide aleoTxId." }, 402);
+    }
+
+    // Verify the transaction on Aleo network
+    const verification = await verifyAleoTransaction(
+      aleoTxId,
+      "maetra_subscription_v3.aleo",
+      "subscribe",
+    );
+
+    if (!verification.valid) {
+      return c.json({ error: `Payment verification failed: ${verification.error}` }, 402);
+    }
+
+    // Check this tx hasn't been used for another subscription already
+    const txReused = await db.subscription.findFirst({
+      where: { aleoTxId, status: "active" },
+    });
+    if (txReused) {
+      return c.json({ error: "This transaction has already been used" }, 409);
+    }
   }
 
   const expiresAt = new Date();

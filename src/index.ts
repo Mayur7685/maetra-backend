@@ -10,6 +10,7 @@ import posts from "./routes/posts.js";
 import subscriptions from "./routes/subscriptions.js";
 import exchanges from "./routes/exchanges.js";
 import aleoRoutes from "./routes/aleo.js";
+import keys from "./routes/keys.js";
 
 const app = new Hono();
 
@@ -51,6 +52,7 @@ app.route("/api/posts", posts);
 app.route("/api/subscriptions", subscriptions);
 app.route("/api/exchanges", exchanges);
 app.route("/api/aleo", aleoRoutes);
+app.route("/api/keys", keys);
 
 // Health check
 app.get("/api/health", (c) => {

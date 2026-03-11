@@ -5,6 +5,7 @@ import { authMiddleware } from "../middleware/auth.js";
 const posts = new Hono();
 
 // POST /api/posts — Create a new post (auth required)
+// Content arrives pre-encrypted from the client. Server stores it as-is.
 posts.post("/", authMiddleware, async (c) => {
   const { userId } = c.get("user");
   const { title, content } = await c.req.json<{ title: string; content: string }>();
@@ -13,11 +14,13 @@ posts.post("/", authMiddleware, async (c) => {
     return c.json({ error: "Title and content are required" }, 400);
   }
 
+  // Store content as-is — it's already encrypted client-side with the creator's CEK.
+  // The server never sees plaintext.
   const post = await db.post.create({
     data: {
       creatorId: userId,
       title,
-      contentEncrypted: content, // In production, encrypt this
+      contentEncrypted: content,
     },
   });
 
@@ -25,6 +28,7 @@ posts.post("/", authMiddleware, async (c) => {
 });
 
 // GET /api/posts/:id — Get a single post (subscription check)
+// Returns ciphertext — client decrypts with CEK
 posts.get("/:id", authMiddleware, async (c) => {
   const { userId } = c.get("user");
   const postId = c.req.param("id");
@@ -47,7 +51,7 @@ posts.get("/:id", authMiddleware, async (c) => {
     return c.json({ error: "Post not found" }, 404);
   }
 
-  // Creator can always see their own posts
+  // Creator can always see their own posts (they have the CEK to decrypt)
   if (post.creatorId === userId) {
     return c.json({ post });
   }
@@ -75,6 +79,7 @@ posts.get("/:id", authMiddleware, async (c) => {
     });
   }
 
+  // Subscriber with active access — return ciphertext (client decrypts with CEK)
   return c.json({ post });
 });
 
@@ -109,7 +114,7 @@ posts.get("/creator/:username/posts", authMiddleware, async (c) => {
     select: {
       id: true,
       title: true,
-      contentEncrypted: hasAccess,
+      contentEncrypted: hasAccess, // Only fetch ciphertext if user has access
       publishedAt: true,
     },
   });

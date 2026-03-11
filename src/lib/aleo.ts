@@ -9,7 +9,7 @@ const ENDPOINT = "https://api.explorer.provable.com/v1";
 
 const PROGRAMS = {
   TRUST: "maetra_trust.aleo",
-  SUBSCRIPTION: "maetra_subscription.aleo",
+  SUBSCRIPTION: "maetra_subscription_v3.aleo",
   CONTENT: "maetra_content.aleo",
 } as const;
 
