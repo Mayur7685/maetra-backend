@@ -39,6 +39,7 @@ leaderboard.get("/", async (c) => {
     weightClass: entry.weightClass || "Lightweight",
     lastVerifiedAt: entry.lastVerifiedAt,
     hasAlpha: (entry.user.subscriptionPriceMicrocredits || 0n) > 0n,
+    hasProfile: !!entry.user.username,
   }));
 
   return c.json({ leaderboard: leaderboardData, period });

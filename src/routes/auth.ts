@@ -7,10 +7,10 @@ const auth = new Hono();
 
 // POST /api/auth/register
 auth.post("/register", async (c) => {
-  const { email, password } = await c.req.json<{ email: string; password: string }>();
+  const { email, password, username } = await c.req.json<{ email: string; password: string; username: string }>();
 
-  if (!email || !password) {
-    return c.json({ error: "Email and password are required" }, 400);
+  if (!email || !password || !username) {
+    return c.json({ error: "Email, password, and username are required" }, 400);
   }
 
   if (password.length < 8) {
@@ -22,9 +22,14 @@ auth.post("/register", async (c) => {
     return c.json({ error: "Email already registered" }, 409);
   }
 
+  const existingUsername = await db.user.findUnique({ where: { username } });
+  if (existingUsername) {
+    return c.json({ error: "Username already taken" }, 409);
+  }
+
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await db.user.create({
-    data: { email, passwordHash },
+    data: { email, passwordHash, username },
   });
 
   const token = signToken({ userId: user.id, email: user.email });
